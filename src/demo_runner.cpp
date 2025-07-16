@@ -516,6 +516,6 @@ void DemoRunner::measurePerformance()
     
     // 性能比较
     qDebug() << "\n性能比较 (以直接调用为基准):";
-    qDebug() << QString("属性系统调用慢 %.1f 倍").arg(double(propertyTime) / directTime);
-    qDebug() << QString("反射调用慢 %.1f 倍").arg(double(reflectionTime) / directTime);
+    qDebug() << QString("属性系统调用慢 %1 倍").arg(double(propertyTime) / directTime, 0, 'f', 1);
+    qDebug() << QString("反射调用慢 %1 倍").arg(double(reflectionTime) / directTime, 0, 'f', 1);
 }

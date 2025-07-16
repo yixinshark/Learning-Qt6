@@ -156,12 +156,12 @@ QString Person::getInfo() const
      * 返回格式化的个人信息
      * 这个方法也可以通过反射调用
      */
-    return QString("姓名: %1, 年龄: %2, 成年: %3, 邮箱: %4, 薪水: %.2f")
+    return QString("姓名: %1, 年龄: %2, 成年: %3, 邮箱: %4, 薪水: %5")
            .arg(m_name)
            .arg(m_age)
            .arg(isAdult() ? "是" : "否")
            .arg(m_email.isEmpty() ? "未设置" : m_email)
-           .arg(m_salary);
+           .arg(m_salary, 0, 'f', 2);  // 保留2位小数
 }
 
 void Person::celebrateBirthday()
