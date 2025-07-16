@@ -23,8 +23,6 @@ _deps/
 *.qbs.user
 *.qbs.user.*
 *.moc
-moc_*.cpp
-moc_*.h
 qrc_*.cpp
 ui_*.h
 *.qmlc
@@ -81,9 +79,10 @@ compile_commands.json
 *.out
 *.app
 
-# Generated MOC files (keep the analyzed version for learning)
-src/generated/moc_*.cpp
-!src/generated/moc_*_analyzed.cpp
+# Generated MOC files - keep all files in src/generated for learning purposes
+# (MOC files in build directory are still ignored)
+build/**/moc_*.cpp
+build/**/*.moc
 
 # Temporary files
 *.tmp

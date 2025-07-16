@@ -144,7 +144,7 @@ void Person::introduce() const
     }
     
     if (m_salary > 0) {
-        intro += QString("，我的薪水是%.2f").arg(m_salary);
+        intro += QString("，我的薪水是%1").arg(m_salary, 0, 'f', 2);
     }
     
     qDebug() << intro;

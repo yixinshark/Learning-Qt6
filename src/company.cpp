@@ -180,8 +180,8 @@ QString Company::getCompanyInfo() const
     info += QString("地址: %1\n").arg(m_address);
     info += QString("类型: %1\n").arg(typeToString(m_type));
     info += QString("员工数量: %1\n").arg(employeeCount());
-    info += QString("总薪水: %.2f\n").arg(totalSalary());
-    info += QString("平均薪水: %.2f\n").arg(averageSalary());
+    info += QString("总薪水: %1\n").arg(totalSalary(), 0, 'f', 2);
+    info += QString("平均薪水: %1\n").arg(averageSalary(), 0, 'f', 2);
     
     info += "\n员工列表:\n";
     for (int i = 0; i < m_employees.size(); ++i) {
@@ -311,13 +311,13 @@ void Company::generateReport()
                                                    return a->salary() < b->salary();
                                                });
         
-        report += QString("最低薪水: %.2f (%1)\n")
+        report += QString("最低薪水: %2 (%1)\n")
                  .arg((*minMaxSalary.first)->name())
-                 .arg((*minMaxSalary.first)->salary());
+                 .arg((*minMaxSalary.first)->salary(), 0, 'f', 2);
         
-        report += QString("最高薪水: %.2f (%1)\n")
+        report += QString("最高薪水: %2 (%1)\n")
                  .arg((*minMaxSalary.second)->name())
-                 .arg((*minMaxSalary.second)->salary());
+                 .arg((*minMaxSalary.second)->salary(), 0, 'f', 2);
     }
     
     qDebug() << "生成公司报告:\n" << report;
