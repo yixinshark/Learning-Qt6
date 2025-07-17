@@ -9,7 +9,7 @@
 ** 3. 这个文件展示了Qt元对象系统的内部实现机制
 *****************************************************************************/
 
-#include "../../../src/person.h"
+#include "../../src/person.h"
 #include <QtCore/qmetatype.h>
 #include <QtCore/qtmochelpers.h>
 #include <memory>

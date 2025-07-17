@@ -6,7 +6,7 @@
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
 
-#include "../../../src/company.h"
+#include "../../src/company.h"
 #include <QtCore/qmetatype.h>
 
 #include <QtCore/qtmochelpers.h>
