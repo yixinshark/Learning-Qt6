@@ -294,36 +294,72 @@ void Person::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void
  * 这个静态对象包含了Person类的完整元信息，
  * 是Qt元对象系统访问类信息的入口点。
  */
-const QMetaObject Person::staticMetaObject = { {
-    // 父类的元对象指针
-    QMetaObject::SuperData::link<QObject::staticMetaObject>(),
-    
-    // 字符串数据
-    qt_meta_stringdata_CLASSPersonENDCLASS.offsetsAndSizes,
-    qt_meta_stringdata_CLASSPersonENDCLASS.stringdata0,
-    
-    // 元数据
-    qt_meta_data_CLASSPersonENDCLASS,
-    
-    // 静态元调用函数
-    qt_static_metacall,
-    
-    // 额外数据（通常为nullptr）
-    nullptr,
-    
-    // Qt6新增的类型特征
-    qt_incomplete_metaTypeArray<qt_meta_stringdata_CLASSPersonENDCLASS_t,
-        // 属性元类型
+Q_CONSTINIT const QMetaObject Person::staticMetaObject = { {
+    QMetaObject::SuperData::link<QObject::staticMetaObject>(), // 父类的元对象指针
+    qt_meta_stringdata_CLASSPersonENDCLASS.offsetsAndSizes, // 字符串数据
+    qt_meta_data_CLASSPersonENDCLASS, // 元数据
+    qt_static_metacall, // 静态元调用函数
+    nullptr, // 额外数据（通常为nullptr）
+    qt_incomplete_metaTypeArray<qt_meta_stringdata_CLASSPersonENDCLASS_t, // Qt6新增的类型特征
+        // property 'name'
         QtPrivate::TypeAndForceComplete<QString, std::true_type>,
+        // property 'age'
         QtPrivate::TypeAndForceComplete<int, std::true_type>,
+        // property 'isAdult'
         QtPrivate::TypeAndForceComplete<bool, std::true_type>,
+        // property 'email'
         QtPrivate::TypeAndForceComplete<QString, std::true_type>,
+        // property 'salary'
         QtPrivate::TypeAndForceComplete<double, std::true_type>,
-        
-        // 方法元类型
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<Person, std::true_type>,
+        // method 'nameChanged'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
-        // ... 其他方法的类型信息
+        // method 'ageChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'emailChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'salaryChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<double, std::false_type>,
+        // method 'birthdayCelebrated'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'salaryRaised'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<double, std::false_type>,
+        QtPrivate::TypeAndForceComplete<double, std::false_type>,
+        // method 'becameAdult'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'statusChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'onNameChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'onAgeChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'reset'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'startAging'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'stopAging'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onTimerTimeout'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'introduce'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'getInfo'
+        QtPrivate::TypeAndForceComplete<QString, std::false_type>,
+        // method 'celebrateBirthday'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'giveRaise'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<double, std::false_type>
     >,
     nullptr
 } };
