@@ -3,15 +3,18 @@
 ## 目录
 1. [概述](#概述)
 2. [核心概念](#核心概念)
-3. [QObject基础示例](#qobject基础示例)
-4. [MOC编译过程详解](#moc编译过程详解)
-5. [元对象系统架构](#元对象系统架构)
-6. [信号槽机制深入](#信号槽机制深入)
-7. [属性系统](#属性系统)
-8. [反射与内省](#反射与内省)
-9. [实际应用场景](#实际应用场景)
-10. [性能考量](#性能考量)
-11. [最佳实践](#最佳实践)
+3. [关键宏定义深度解析](#关键宏定义深度解析)
+4. [QObject基础示例](#qobject基础示例)
+5. [MOC编译过程详解](#moc编译过程详解)
+6. [元对象系统架构](#元对象系统架构)
+7. [信号槽机制深入](#信号槽机制深入)
+8. [Connect函数实现原理](#connect函数实现原理)
+9. [属性系统](#属性系统)
+10. [反射与内省](#反射与内省)
+11. [实际应用场景](#实际应用场景)
+12. [Demo项目技术点分析](#demo项目技术点分析)
+13. [性能考量](#性能考量)
+14. [最佳实践](#最佳实践)
 
 ## 概述
 
@@ -83,6 +86,367 @@ public:
                      QGenericArgument val0 = QGenericArgument()) const;
 };
 ```
+
+## 关键宏定义深度解析
+
+Qt元对象系统的核心功能通过一系列宏定义实现。理解这些宏的工作原理对于深入掌握Qt至关重要。
+
+### Q_OBJECT 宏
+
+`Q_OBJECT`是元对象系统的入口宏，必须放在类声明的开头。
+
+#### 宏定义分析
+```cpp
+// qobjectdefs.h中的简化定义
+#define Q_OBJECT \
+public: \
+    QT_WARNING_PUSH \
+    Q_OBJECT_NO_OVERRIDE_WARNING \
+    static const QMetaObject staticMetaObject; \
+    virtual const QMetaObject *metaObject() const; \
+    virtual void *qt_metacast(const char *); \
+    virtual int qt_metacall(QMetaObject::Call, int, void **); \
+    QT_TR_FUNCTIONS \
+private: \
+    Q_OBJECT_NO_ATTRIBUTES_WARNING \
+    Q_DECL_HIDDEN_STATIC_METACALL static void qt_static_metacall(QObject *, QMetaObject::Call, int, void **); \
+    QT_WARNING_POP \
+    struct QPrivateSignal {}; \
+    QT_ANNOTATE_CLASS(qt_qobject, "")
+```
+
+#### 功能解析
+1. **声明静态元对象**：`static const QMetaObject staticMetaObject`
+2. **虚函数声明**：提供元对象访问接口
+3. **类型转换支持**：`qt_metacast`实现安全的向下转型
+4. **元调用接口**：`qt_metacall`统一的方法调用入口
+5. **静态元调用**：`qt_static_metacall`高效的方法分发
+6. **私有信号类型**：`QPrivateSignal`确保信号只能在类内部发射
+
+#### 为什么必须使用Q_OBJECT？
+```cpp
+// 没有Q_OBJECT的类
+class SimpleClass : public QObject {
+    // 缺少元对象支持，无法使用：
+    // - 信号槽
+    // - 属性系统  
+    // - 反射调用
+    // - qobject_cast
+};
+
+// 有Q_OBJECT的类
+class MetaClass : public QObject {
+    Q_OBJECT  // MOC会为此类生成完整的元对象代码
+    // 可以使用所有元对象特性
+};
+```
+
+### Q_PROPERTY 宏
+
+`Q_PROPERTY`用于声明类的属性，支持读写访问、变更通知等功能。
+
+#### 宏语法
+```cpp
+Q_PROPERTY(type name 
+           READ getter 
+           [WRITE setter] 
+           [RESET resetter] 
+           [NOTIFY notifySignal] 
+           [REVISION int] 
+           [DESIGNABLE bool] 
+           [SCRIPTABLE bool] 
+           [STORED bool] 
+           [USER bool] 
+           [CONSTANT] 
+           [FINAL])
+```
+
+#### 属性特性详解
+```cpp
+class PropertyDemo : public QObject {
+    Q_OBJECT
+    
+    // 基本读写属性
+    Q_PROPERTY(QString name READ name WRITE setName NOTIFY nameChanged)
+    
+    // 只读属性
+    Q_PROPERTY(int id READ id CONSTANT)
+    
+    // 可重置属性
+    Q_PROPERTY(QColor color READ color WRITE setColor RESET resetColor)
+    
+    // 计算属性（不存储）
+    Q_PROPERTY(QString displayName READ displayName STORED false)
+    
+    // 设计器属性（Qt Designer中可见）
+    Q_PROPERTY(bool visible READ isVisible WRITE setVisible DESIGNABLE true)
+    
+    // 用户属性（主要属性，用于数据绑定）
+    Q_PROPERTY(QString text READ text WRITE setText USER true)
+
+public:
+    QString name() const { return m_name; }
+    void setName(const QString &name) {
+        if (m_name != name) {
+            m_name = name;
+            emit nameChanged(name);  // 发射通知信号
+        }
+    }
+    
+    int id() const { return m_id; }  // 只读，无setter
+    
+    QColor color() const { return m_color; }
+    void setColor(const QColor &color) { m_color = color; }
+    void resetColor() { m_color = Qt::white; }  // 重置功能
+    
+    QString displayName() const {
+        return QString("%1 (ID: %2)").arg(m_name).arg(m_id);  // 计算属性
+    }
+
+signals:
+    void nameChanged(const QString &name);
+
+private:
+    QString m_name;
+    int m_id = 0;
+    QColor m_color = Qt::white;
+};
+```
+
+#### MOC如何处理Q_PROPERTY
+MOC解析Q_PROPERTY声明后，会在元数据表中生成属性信息：
+```cpp
+// MOC生成的属性数据（简化）
+static const uint qt_meta_data_PropertyDemo[] = {
+    // 属性表
+    // name属性: 名称索引, 类型, 标志位
+    0, QMetaType::QString, 0x00495103,  // READ|WRITE|NOTIFY
+    1, QMetaType::Int,     0x00015401,  // READ|CONSTANT  
+    2, QMetaType::QColor,  0x00495107,  // READ|WRITE|RESET
+    3, QMetaType::QString, 0x00095001,  // READ|STORED=false
+};
+```
+
+### Q_INVOKABLE 宏
+
+`Q_INVOKABLE`标记方法可以通过元对象系统调用。
+
+#### 宏定义
+```cpp
+// qobjectdefs.h
+#define Q_INVOKABLE
+```
+
+看起来`Q_INVOKABLE`是个空宏？实际上它是MOC的标记！
+
+#### 工作原理
+```cpp
+class InvokableDemo : public QObject {
+    Q_OBJECT
+    
+public:
+    // 普通方法 - 无法通过QMetaObject::invokeMethod调用
+    void normalMethod() { qDebug() << "Normal method"; }
+    
+    // Q_INVOKABLE方法 - 可以通过反射调用
+    Q_INVOKABLE void invokableMethod() { qDebug() << "Invokable method"; }
+    Q_INVOKABLE QString getInfo() const { return "Info"; }
+    Q_INVOKABLE void processData(const QString &data, int count) {
+        qDebug() << "Processing:" << data << "count:" << count;
+    }
+
+public slots:
+    // 槽函数天然可调用（无需Q_INVOKABLE）
+    void slotMethod() { qDebug() << "Slot method"; }
+};
+```
+
+#### 为什么Q_INVOKABLE方法可以反射调用？
+MOC扫描源码时，会将标记为`Q_INVOKABLE`的方法记录在元数据中：
+
+```cpp
+// MOC生成的方法表（简化）
+static const uint qt_meta_data_InvokableDemo[] = {
+    // 方法表
+    // invokableMethod(): 名称索引, 参数数量, 参数表索引, 标签, 标志, 元类型偏移
+    1, 0, 14, 2, 0x02, 6,  // 0x02 = Method标志
+    2, 0, 15, 2, 0x02, 7,  // getInfo()
+    3, 2, 16, 2, 0x02, 8,  // processData(QString,int)
+    4, 0, 21, 2, 0x0a, 11, // slotMethod() - 0x0a = Slot标志
+};
+```
+
+#### 反射调用示例
+```cpp
+void testInvocation() {
+    InvokableDemo *obj = new InvokableDemo;
+    
+    // 成功 - Q_INVOKABLE方法
+    bool success1 = QMetaObject::invokeMethod(obj, "invokableMethod");
+    qDebug() << "Invoke invokableMethod:" << success1;  // true
+    
+    // 成功 - 槽函数
+    bool success2 = QMetaObject::invokeMethod(obj, "slotMethod");
+    qDebug() << "Invoke slotMethod:" << success2;  // true
+    
+    // 失败 - 普通方法
+    bool success3 = QMetaObject::invokeMethod(obj, "normalMethod");
+    qDebug() << "Invoke normalMethod:" << success3;  // false
+    
+    // 带参数和返回值的调用
+    QString result;
+    bool success4 = QMetaObject::invokeMethod(obj, "getInfo", 
+                                             Q_RETURN_ARG(QString, result));
+    qDebug() << "Result:" << result;  // "Info"
+    
+    // 带多个参数的调用
+    bool success5 = QMetaObject::invokeMethod(obj, "processData",
+                                             Q_ARG(QString, "test data"),
+                                             Q_ARG(int, 42));
+}
+```
+
+### Q_EMIT 宏
+
+`Q_EMIT`用于发射信号，实际上是`emit`关键字的别名。
+
+#### 宏定义
+```cpp
+// qobjectdefs.h
+#ifndef QT_NO_EMIT
+# define emit
+#endif
+#ifndef QT_NO_KEYWORDS
+# define Q_EMIT emit
+#endif
+```
+
+#### 使用示例
+```cpp
+class SignalDemo : public QObject {
+    Q_OBJECT
+    
+public:
+    void triggerSignal() {
+        // 三种等价的信号发射方式
+        emit dataChanged("new data");     // 标准方式
+        Q_EMIT dataChanged("new data");   // 显式宏方式  
+        dataChanged("new data");          // 直接调用（不推荐）
+    }
+
+signals:
+    void dataChanged(const QString &data);
+};
+```
+
+#### emit的工作原理
+`emit`实际上是空的！信号发射的真正工作由MOC生成的信号函数完成：
+
+```cpp
+// MOC为dataChanged信号生成的函数
+void SignalDemo::dataChanged(const QString &_t1) {
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(&_t1)) };
+    QMetaObject::activate(this, &staticMetaObject, 0, _a);
+}
+```
+
+当你写`emit dataChanged("test")`时，实际调用的是上面这个MOC生成的函数。
+
+### Q_ENUM 和 Q_FLAG 宏
+
+用于将枚举类型注册到元对象系统。
+
+#### 基本用法
+```cpp
+class EnumDemo : public QObject {
+    Q_OBJECT
+    
+public:
+    enum Priority {
+        Low,
+        Normal, 
+        High,
+        Critical
+    };
+    Q_ENUM(Priority)  // 注册枚举到元对象系统
+    
+    enum Option {
+        None = 0x0,
+        ReadOnly = 0x1,
+        WriteOnly = 0x2,
+        ReadWrite = ReadOnly | WriteOnly,
+        Executable = 0x4
+    };
+    Q_DECLARE_FLAGS(Options, Option)
+    Q_FLAG(Options)  // 注册标志枚举
+    
+    Q_PROPERTY(Priority priority READ priority WRITE setPriority)
+    Q_PROPERTY(Options options READ options WRITE setOptions)
+
+public:
+    Priority priority() const { return m_priority; }
+    void setPriority(Priority p) { m_priority = p; }
+    
+    Options options() const { return m_options; }
+    void setOptions(Options opts) { m_options = opts; }
+
+private:
+    Priority m_priority = Normal;
+    Options m_options = None;
+};
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(EnumDemo::Options)
+```
+
+#### 枚举的元对象功能
+```cpp
+void testEnumMetaObject() {
+    const QMetaObject *metaObj = &EnumDemo::staticMetaObject;
+    
+    // 获取枚举信息
+    QMetaEnum priorityEnum = metaObj->enumerator(
+        metaObj->indexOfEnumerator("Priority"));
+    
+    qDebug() << "Enum name:" << priorityEnum.name();
+    qDebug() << "Key count:" << priorityEnum.keyCount();
+    
+    // 枚举值与字符串转换
+    for (int i = 0; i < priorityEnum.keyCount(); ++i) {
+        qDebug() << "Key:" << priorityEnum.key(i) 
+                 << "Value:" << priorityEnum.value(i);
+    }
+    
+    // 字符串到枚举值
+    int value = priorityEnum.keyToValue("High");  // 返回2
+    
+    // 枚举值到字符串
+    const char* key = priorityEnum.valueToKey(2);  // 返回"High"
+    
+    // 在属性系统中使用
+    EnumDemo *obj = new EnumDemo;
+    obj->setProperty("priority", "Critical");  // 字符串设置枚举
+    
+    QVariant priorityVar = obj->property("priority");
+    qDebug() << "Priority value:" << priorityVar.toInt();  // 3
+}
+```
+
+### 宏定义总结
+
+| 宏名称 | 作用 | MOC处理 | 使用场景 |
+|--------|------|---------|----------|
+| Q_OBJECT | 启用元对象功能 | 生成完整元对象代码 | 所有需要元对象功能的类 |
+| Q_PROPERTY | 声明属性 | 生成属性元数据 | 需要统一属性访问的场景 |
+| Q_INVOKABLE | 标记可调用方法 | 记录到方法表 | 需要反射调用的方法 |
+| Q_EMIT/emit | 发射信号 | 空宏，调用MOC生成的函数 | 信号发射 |
+| Q_ENUM | 注册枚举 | 生成枚举元数据 | 需要字符串转换的枚举 |
+| Q_FLAG | 注册标志枚举 | 生成标志元数据 | 位标志操作 |
+
+理解这些宏的工作原理，有助于：
+1. **正确使用元对象功能**：知道什么时候需要什么宏
+2. **调试元对象问题**：理解MOC的处理过程
+3. **优化性能**：了解各种调用方式的开销
+4. **扩展Qt功能**：基于元对象系统开发自定义功能
 
 ## QObject基础示例
 
@@ -541,6 +905,634 @@ void QMetaObject::activate(QObject *sender, const QMetaObject *m,
     }
 }
 ```
+
+## Connect函数实现原理
+
+`QObject::connect`是信号槽系统的核心函数，理解其实现原理对于掌握Qt的事件机制至关重要。
+
+### Connect函数的多种重载形式
+
+```cpp
+// 1. 函数指针连接（推荐，类型安全）
+connect(sender, &Sender::signal, receiver, &Receiver::slot);
+
+// 2. 字符串连接（传统方式）
+connect(sender, SIGNAL(signal(int)), receiver, SLOT(slot(int)));
+
+// 3. Lambda连接
+connect(sender, &Sender::signal, [](int value) { /* 处理 */ });
+
+// 4. 函数对象连接
+connect(sender, &Sender::signal, functor);
+```
+
+### Connect函数的内部实现流程
+
+#### 1. 连接建立过程
+
+```cpp
+// QObject::connect的简化实现
+QMetaObject::Connection QObject::connect(const QObject *sender, 
+                                        const QMetaMethod &signal,
+                                        const QObject *receiver, 
+                                        const QMetaMethod &slot,
+                                        Qt::ConnectionType type)
+{
+    // 1. 参数验证
+    if (!sender || !receiver) {
+        qWarning("QObject::connect: Cannot connect to/from null object");
+        return QMetaObject::Connection();
+    }
+    
+    // 2. 获取信号和槽的索引
+    int signal_index = signal.methodIndex();
+    int slot_index = slot.methodIndex();
+    
+    // 3. 验证信号槽签名兼容性
+    if (!QMetaObject::checkConnectArgs(signal.methodSignature(), 
+                                      slot.methodSignature())) {
+        qWarning("QObject::connect: Incompatible sender/receiver arguments");
+        return QMetaObject::Connection();
+    }
+    
+    // 4. 创建连接对象
+    QObjectPrivate::Connection *c = new QObjectPrivate::Connection;
+    c->sender = sender;
+    c->receiver = receiver;
+    c->method_offset = slot_index;
+    c->method_relative = slot_index - receiver->metaObject()->methodOffset();
+    c->connectionType = type;
+    c->isSlotObject = false;
+    
+    // 5. 将连接添加到发送者的连接列表
+    QObjectPrivate *s = QObjectPrivate::get(const_cast<QObject*>(sender));
+    s->addConnection(signal_index, c);
+    
+    // 6. 将连接添加到接收者的连接列表（用于清理）
+    QObjectPrivate *r = QObjectPrivate::get(const_cast<QObject*>(receiver));
+    r->senders.insert(c, sender);
+    
+    return QMetaObject::Connection(c);
+}
+```
+
+#### 2. 连接数据结构
+
+Qt使用复杂的数据结构来管理信号槽连接：
+
+```cpp
+// QObjectPrivate中的连接管理
+class QObjectPrivate {
+public:
+    // 连接列表 - 每个信号对应一个连接链表
+    struct ConnectionList {
+        QObjectPrivate::Connection *first;
+        QObjectPrivate::Connection *last;
+    };
+    
+    // 连接对象
+    struct Connection {
+        QObject *sender;           // 发送者
+        QObject *receiver;         // 接收者
+        union {
+            StaticMetaCallFunction callFunction;  // 函数指针调用
+            QtPrivate::QSlotObjectBase *slotObj;  // 槽对象（Lambda等）
+        };
+        
+        // 连接属性
+        ushort method_offset;      // 方法偏移
+        ushort method_relative;    // 相对方法索引
+        uint signal_index : 27;    // 信号索引
+        uint connectionType : 3;   // 连接类型
+        uint isSlotObject : 1;     // 是否为槽对象
+        uint ownArgumentTypes : 1; // 是否拥有参数类型
+        
+        // 链表指针
+        Connection *nextConnectionList;  // 同一信号的下一个连接
+        Connection *next;               // 全局连接链表
+        Connection **prev;              // 反向指针
+    };
+    
+    // 连接列表数组 - 索引对应信号索引
+    ConnectionList *connectionLists;
+    
+    // 发送者列表 - 用于对象销毁时清理连接
+    QMultiHash<Connection*, QObject*> senders;
+};
+```
+
+#### 3. 信号发射时的查找过程
+
+当信号被发射时，Qt需要快速找到所有连接的槽：
+
+```cpp
+void QMetaObject::activate(QObject *sender, const QMetaObject *m, 
+                          int local_signal_index, void **argv)
+{
+    // 1. 计算全局信号索引
+    int signal_index = local_signal_index + m->methodOffset();
+    
+    QObjectPrivate *sp = QObjectPrivate::get(sender);
+    
+    // 2. 获取该信号的连接列表
+    if (sp->connectionLists && 
+        signal_index < sp->connectionLists->count()) {
+        
+        const QObjectPrivate::ConnectionList &connectionList = 
+            sp->connectionLists[signal_index];
+        
+        // 3. 遍历连接链表
+        QObjectPrivate::Connection *c = connectionList.first;
+        while (c) {
+            QObject *receiver = c->receiver;
+            
+            // 4. 检查接收者是否仍然有效
+            if (receiver && (c->receiver == nullptr || 
+                           !QObjectPrivate::get(receiver)->wasDeleted)) {
+                
+                // 5. 根据连接类型调用槽
+                switch (c->connectionType & Qt::UniqueConnection) {
+                case Qt::DirectConnection:
+                    // 直接调用
+                    callSlot(c, receiver, argv);
+                    break;
+                    
+                case Qt::QueuedConnection:
+                    // 队列调用
+                    queueSlot(c, receiver, argv);
+                    break;
+                    
+                case Qt::BlockingQueuedConnection:
+                    // 阻塞队列调用
+                    blockingQueueSlot(c, receiver, argv);
+                    break;
+                    
+                case Qt::AutoConnection:
+                    // 自动选择连接类型
+                    if (currentThreadData == QObjectPrivate::get(receiver)->threadData) {
+                        callSlot(c, receiver, argv);  // 同线程直接调用
+                    } else {
+                        queueSlot(c, receiver, argv); // 跨线程队列调用
+                    }
+                    break;
+                }
+            }
+            
+            c = c->nextConnectionList;
+        }
+    }
+}
+```
+
+#### 4. 槽函数调用的具体实现
+
+```cpp
+void callSlot(QObjectPrivate::Connection *c, QObject *receiver, void **argv)
+{
+    if (c->isSlotObject) {
+        // Lambda或函数对象调用
+        c->slotObj->call(receiver, argv);
+    } else if (c->callFunction) {
+        // 函数指针调用（Qt5+的新方式）
+        c->callFunction(receiver, QMetaObject::InvokeMetaMethod, 
+                       c->method_relative, argv);
+    } else {
+        // 传统的元对象调用
+        const int method_offset = c->method_offset;
+        QObjectPrivate::get(receiver)->metaObject->metacall(
+            receiver, QMetaObject::InvokeMetaMethod, method_offset, argv);
+    }
+}
+```
+
+### 连接类型详解
+
+Qt提供了多种连接类型来适应不同的使用场景：
+
+```cpp
+enum ConnectionType {
+    AutoConnection,          // 自动选择（默认）
+    DirectConnection,        // 直接调用
+    QueuedConnection,        // 队列调用
+    BlockingQueuedConnection,// 阻塞队列调用
+    UniqueConnection = 0x80  // 唯一连接标志
+};
+```
+
+#### 连接类型的选择逻辑
+
+```cpp
+void demonstrateConnectionTypes()
+{
+    QObject *sender = new QObject;
+    QObject *receiver = new QObject;
+    
+    // 1. 直接连接 - 立即在当前线程执行
+    connect(sender, &QObject::destroyed, receiver, &QObject::deleteLater, 
+            Qt::DirectConnection);
+    
+    // 2. 队列连接 - 通过事件循环异步执行
+    connect(sender, &QObject::destroyed, receiver, &QObject::deleteLater, 
+            Qt::QueuedConnection);
+    
+    // 3. 阻塞队列连接 - 跨线程同步调用
+    connect(sender, &QObject::destroyed, receiver, &QObject::deleteLater, 
+            Qt::BlockingQueuedConnection);
+    
+    // 4. 自动连接 - Qt自动选择最合适的类型
+    connect(sender, &QObject::destroyed, receiver, &QObject::deleteLater, 
+            Qt::AutoConnection);
+    
+    // 5. 唯一连接 - 防止重复连接
+    connect(sender, &QObject::destroyed, receiver, &QObject::deleteLater, 
+            Qt::UniqueConnection);
+}
+```
+
+### 连接的生命周期管理
+
+Qt自动管理连接的生命周期，当对象被销毁时会自动清理相关连接：
+
+```cpp
+// QObject析构函数中的连接清理
+QObject::~QObject()
+{
+    QObjectPrivate *d = d_func();
+    
+    // 1. 断开所有发出的信号连接
+    if (d->connectionLists) {
+        for (int signal = 0; signal < d->connectionLists->count(); ++signal) {
+            QObjectPrivate::ConnectionList &connectionList = 
+                (*d->connectionLists)[signal];
+            
+            while (connectionList.first) {
+                QObjectPrivate::Connection *c = connectionList.first;
+                disconnectConnection(c);
+            }
+        }
+        delete d->connectionLists;
+    }
+    
+    // 2. 断开所有接收的信号连接
+    QMultiHash<QObjectPrivate::Connection*, QObject*>::iterator it = 
+        d->senders.begin();
+    while (it != d->senders.end()) {
+        QObjectPrivate::Connection *c = it.key();
+        QObject *sender = it.value();
+        disconnectConnection(c);
+        ++it;
+    }
+}
+```
+
+### 性能优化技巧
+
+#### 1. 连接缓存
+```cpp
+class OptimizedClass : public QObject {
+    Q_OBJECT
+    
+public:
+    OptimizedClass() {
+        // 缓存常用的元方法信息
+        m_signalMethod = QMetaMethod::fromSignal(&OptimizedClass::dataChanged);
+        m_slotMethod = metaObject()->method(
+            metaObject()->indexOfSlot("processData()"));
+    }
+    
+private:
+    QMetaMethod m_signalMethod;
+    QMetaMethod m_slotMethod;
+};
+```
+
+#### 2. 批量连接管理
+```cpp
+class ConnectionManager {
+public:
+    void connectAll(QObject *sender, QObject *receiver) {
+        // 批量建立连接，减少重复的元对象查找
+        const QMetaObject *senderMeta = sender->metaObject();
+        const QMetaObject *receiverMeta = receiver->metaObject();
+        
+        // 缓存元对象信息，避免重复查找
+        for (int i = 0; i < senderMeta->methodCount(); ++i) {
+            QMetaMethod signal = senderMeta->method(i);
+            if (signal.methodType() == QMetaMethod::Signal) {
+                // 查找匹配的槽
+                int slotIndex = receiverMeta->indexOfSlot(
+                    signal.name().constData());
+                if (slotIndex != -1) {
+                    QMetaMethod slot = receiverMeta->method(slotIndex);
+                    QObject::connect(sender, signal, receiver, slot);
+                }
+            }
+        }
+    }
+};
+```
+
+理解Connect函数的实现原理有助于：
+1. **优化信号槽性能**：选择合适的连接类型和调用方式
+2. **调试连接问题**：理解连接失败的原因
+3. **设计高效的对象交互**：合理组织信号槽网络
+4. **避免内存泄漏**：正确管理对象生命周期
+
+## Demo项目技术点分析
+
+本文档配套的演示项目是一个完整的Qt6元对象系统学习案例，涵盖了元对象系统的各个重要方面。让我们深入分析项目中使用的关键技术点。
+
+### 项目架构概览
+
+```
+Qt6MetaObjectDemo/
+├── Person类      - 基础元对象特性演示
+├── Company类     - 复杂元对象应用
+├── DemoRunner类  - 演示控制和分析
+└── main.cpp      - 程序入口和基础演示
+```
+
+### Person类 - 基础元对象特性集成
+
+Person类是元对象系统基础特性的完整展示：
+
+#### 1. 属性系统的完整实现
+```cpp
+class Person : public QObject {
+    Q_OBJECT
+    
+    // 不同类型的属性演示
+    Q_PROPERTY(QString name READ name WRITE setName NOTIFY nameChanged)      // 基本读写属性
+    Q_PROPERTY(int age READ age WRITE setAge NOTIFY ageChanged)              // 数值属性
+    Q_PROPERTY(bool isAdult READ isAdult STORED false)                       // 计算属性
+    Q_PROPERTY(QString email READ email WRITE setEmail NOTIFY emailChanged) // 字符串属性
+    Q_PROPERTY(double salary READ salary WRITE setSalary NOTIFY salaryChanged) // 浮点属性
+```
+
+**技术要点分析**：
+- **属性类型多样性**：展示了QString、int、bool、double等不同类型的属性处理
+- **计算属性**：`isAdult`属性使用`STORED false`，表示不存储值，每次读取时计算
+- **通知机制**：每个可写属性都有对应的通知信号，实现属性变化的自动通知
+
+#### 2. 信号设计的层次化
+```cpp
+signals:
+    // 基础属性变化信号
+    void nameChanged(const QString &newName);
+    void ageChanged(int newAge);
+    void emailChanged(const QString &newEmail);
+    void salaryChanged(double newSalary);
+    
+    // 业务逻辑信号
+    void birthdayCelebrated(int newAge);
+    void salaryRaised(double oldSalary, double newSalary);
+    
+    // 状态变化信号
+    void becameAdult();
+    void statusChanged(const QString &status);
+```
+
+**技术要点分析**：
+- **信号分层**：从基础属性信号到业务逻辑信号，再到状态变化信号
+- **参数设计**：不同信号携带不同类型和数量的参数，展示信号的灵活性
+- **语义明确**：信号名称清晰表达了发生的事件
+
+#### 3. 槽函数的多样化应用
+```cpp
+public slots:
+    void onNameChanged(const QString &newName);  // 响应式槽
+    void onAgeChanged(int newAge);               // 响应式槽
+    void reset();                                // 操作型槽
+    void startAging();                           // 控制型槽
+    void stopAging();                            // 控制型槽
+
+private slots:
+    void onTimerTimeout();                       // 内部槽
+```
+
+**技术要点分析**：
+- **槽函数分类**：响应式槽、操作型槽、控制型槽、内部槽
+- **访问级别**：public slots用于外部调用，private slots用于内部逻辑
+- **参数匹配**：槽函数参数与对应信号参数完全匹配
+
+#### 4. Q_INVOKABLE方法的实际应用
+```cpp
+Q_INVOKABLE void introduce() const;           // 无参数方法
+Q_INVOKABLE QString getInfo() const;          // 带返回值方法
+Q_INVOKABLE void celebrateBirthday();         // 业务逻辑方法
+Q_INVOKABLE void giveRaise(double percentage); // 带参数方法
+```
+
+**技术要点分析**：
+- **方法多样性**：涵盖了无参数、带参数、带返回值的各种情况
+- **业务语义**：方法名称具有明确的业务含义
+- **反射调用**：这些方法可以通过`QMetaObject::invokeMethod`调用
+
+### Company类 - 复杂元对象应用
+
+Company类展示了元对象系统在复杂业务场景中的应用：
+
+#### 1. 枚举类型的元对象集成
+```cpp
+enum CompanyType {
+    Technology,     // 科技公司
+    Finance,        // 金融公司
+    Manufacturing,  // 制造业
+    Service,        // 服务业
+    Other          // 其他
+};
+Q_ENUM(CompanyType)  // 注册到元对象系统
+```
+
+**技术要点分析**：
+- **枚举注册**：通过Q_ENUM使枚举值可以与字符串相互转换
+- **属性集成**：枚举可以作为Q_PROPERTY的类型使用
+- **序列化支持**：注册的枚举可以自动序列化和反序列化
+
+#### 2. 对象组合和生命周期管理
+```cpp
+private:
+    QList<Person*> m_employees;  // 员工对象列表
+
+void Company::addEmployee(Person *person) {
+    person->setParent(this);     // 建立父子关系
+    m_employees.append(person);
+    connectEmployeeSignals(person); // 建立信号槽连接
+}
+```
+
+**技术要点分析**：
+- **对象树管理**：通过setParent建立父子关系，自动管理内存
+- **信号槽网络**：动态建立复杂的信号槽连接网络
+- **生命周期同步**：子对象的生命周期与父对象同步
+
+#### 3. 动态属性的实际应用
+```cpp
+void Company::updateDynamicProperties() {
+    setProperty("foundedYear", 2020);
+    setProperty("isPublicCompany", false);
+    setProperty("stockSymbol", "");
+    
+    // 根据公司类型设置不同属性
+    switch (m_type) {
+    case Technology:
+        setProperty("industry", "科技");
+        setProperty("innovationLevel", "高");
+        break;
+    // ...
+    }
+}
+```
+
+**技术要点分析**：
+- **运行时属性**：在运行时动态添加属性，无需预先声明
+- **条件属性**：根据对象状态动态设置不同的属性
+- **属性分组**：相关属性的逻辑分组和管理
+
+### DemoRunner类 - 演示控制和元对象分析
+
+DemoRunner类展示了元对象系统的高级应用和分析技术：
+
+#### 1. 元对象信息的深度分析
+```cpp
+void DemoRunner::analyzeMetaObject(const QMetaObject *metaObj) {
+    // 类基本信息
+    qDebug() << "类名:" << metaObj->className();
+    qDebug() << "方法数量:" << metaObj->methodCount();
+    qDebug() << "属性数量:" << metaObj->propertyCount();
+    
+    // 方法详细分析
+    for (int i = 0; i < metaObj->methodCount(); ++i) {
+        QMetaMethod method = metaObj->method(i);
+        QString typeStr = (method.methodType() == QMetaMethod::Signal) ? "信号" : 
+                         (method.methodType() == QMetaMethod::Slot) ? "槽" : "方法";
+        qDebug() << QString("  [%1] %2: %3")
+                   .arg(typeStr)
+                   .arg(method.name().constData())
+                   .arg(method.methodSignature().constData());
+    }
+}
+```
+
+**技术要点分析**：
+- **元信息遍历**：系统性地遍历类的所有元信息
+- **方法分类**：区分信号、槽、普通方法的不同类型
+- **签名分析**：获取方法的完整签名信息
+
+#### 2. 动态方法调用的实践
+```cpp
+void DemoRunner::runDynamicInvocationDemo() {
+    // 无参数方法调用
+    bool result1 = QMetaObject::invokeMethod(m_person1, "introduce");
+    
+    // 带参数方法调用
+    bool result2 = QMetaObject::invokeMethod(m_person1, "setName", 
+                                           Q_ARG(QString, "动态调用设置的名字"));
+    
+    // 带返回值方法调用
+    QString info;
+    bool result3 = QMetaObject::invokeMethod(m_person1, "getInfo", 
+                                           Q_RETURN_ARG(QString, info));
+    
+    // 队列调用
+    bool result4 = QMetaObject::invokeMethod(m_person1, "celebrateBirthday", 
+                                           Qt::QueuedConnection);
+}
+```
+
+**技术要点分析**：
+- **调用方式多样性**：展示了各种不同的动态调用方式
+- **参数传递**：使用Q_ARG宏进行类型安全的参数传递
+- **返回值处理**：使用Q_RETURN_ARG获取方法返回值
+- **连接类型**：演示不同连接类型的使用场景
+
+#### 3. 性能基准测试的设计
+```cpp
+void DemoRunner::measurePerformance() {
+    const int iterations = 100000;
+    QElapsedTimer timer;
+    
+    // 直接方法调用
+    timer.start();
+    for (int i = 0; i < iterations; ++i) {
+        m_person1->name();
+    }
+    qint64 directTime = timer.elapsed();
+    
+    // 属性系统调用
+    timer.restart();
+    for (int i = 0; i < iterations; ++i) {
+        m_person1->property("name");
+    }
+    qint64 propertyTime = timer.elapsed();
+    
+    // 反射方法调用
+    timer.restart();
+    for (int i = 0; i < iterations; ++i) {
+        QString result;
+        QMetaObject::invokeMethod(m_person1, "getInfo", Q_RETURN_ARG(QString, result));
+    }
+    qint64 reflectionTime = timer.elapsed();
+}
+```
+
+**技术要点分析**：
+- **基准测试设计**：对比不同调用方式的性能差异
+- **测试方法**：使用大量重复调用来获得可靠的性能数据
+- **结果分析**：量化不同调用方式的性能开销
+
+### 项目中的设计模式应用
+
+#### 1. 观察者模式（信号槽）
+```cpp
+// Person类发射状态变化信号
+emit statusChanged(status);
+
+// Company类监听员工状态变化
+connect(person, &Person::statusChanged, 
+        this, &Company::onEmployeeStatusChanged);
+```
+
+#### 2. 组合模式（对象树）
+```cpp
+// Company包含多个Person对象
+QList<Person*> m_employees;
+
+// 建立父子关系
+person->setParent(this);
+```
+
+#### 3. 策略模式（连接类型）
+```cpp
+// 根据需要选择不同的连接策略
+Qt::DirectConnection    // 直接调用策略
+Qt::QueuedConnection    // 队列调用策略
+Qt::AutoConnection      // 自动选择策略
+```
+
+### 项目的学习价值
+
+#### 1. 渐进式学习路径
+- **Person类**：从简单的属性和信号槽开始
+- **Company类**：进阶到复杂的对象组合和管理
+- **DemoRunner类**：深入到元对象分析和性能测试
+
+#### 2. 实际应用场景
+- **数据模型**：Person和Company类似于实际的数据模型
+- **业务逻辑**：包含了真实的业务操作和状态管理
+- **系统集成**：展示了不同组件之间的集成方式
+
+#### 3. 最佳实践示例
+- **命名规范**：清晰的类名、方法名、信号名
+- **职责分离**：每个类都有明确的职责边界
+- **错误处理**：包含了适当的错误检查和处理
+
+#### 4. 调试和分析技巧
+- **元对象分析**：如何分析类的元信息
+- **性能测试**：如何测量不同调用方式的性能
+- **连接调试**：如何验证信号槽连接的正确性
+
+这个Demo项目不仅是Qt元对象系统的技术演示，更是一个完整的学习案例，展示了如何在实际项目中正确、高效地使用Qt的元对象系统。
 
 ## 属性系统
 
