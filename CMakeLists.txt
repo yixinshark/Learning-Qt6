@@ -36,6 +36,10 @@ message(STATUS "=== 添加子模块 ===")
 add_subdirectory(01_metaobject_system)
 message(STATUS "✓ 01_metaobject_system - Qt元对象系统学习")
 
+# 2. 事件系统模块
+add_subdirectory(02_event_system)
+message(STATUS "✓ 02_event_system - Qt事件系统学习")
+
 # 未来可以添加更多模块，例如：
 
 message(STATUS "=== 配置完成 ===")
