@@ -380,6 +380,8 @@ QString ObjectHierarchyModel::getObjectAddress(QObject* object) const
 
 ObjectHierarchyModel::ObjectNode* ObjectHierarchyModel::findNode(QObject* object, ObjectNode* node) const
 {
+    Q_UNUSED(node)  // 参数暂未使用，但保留以备将来扩展
+    
     if (!object) {
         return nullptr;
     }

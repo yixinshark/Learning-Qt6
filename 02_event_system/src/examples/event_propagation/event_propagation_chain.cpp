@@ -460,4 +460,4 @@ void ChainWidget::animateHighlight()
     });
 }
 
-#include "event_propagation_chain.moc"
+// #include "event_propagation_chain.moc" // 移除不需要的moc包含

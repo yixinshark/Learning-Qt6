@@ -477,6 +477,8 @@ void InteractiveDrawArea::wheelEvent(QWheelEvent *event)
 
 void InteractiveDrawArea::paintEvent(QPaintEvent *event)
 {
+    Q_UNUSED(event)  // 参数暂未使用，但保留以符合Qt接口
+    
     QPainter painter(this);
     
     // 绘制画布内容

@@ -26,10 +26,10 @@ void TestMouseKeyboard::init()
     m_keyboardWidget->show();
     m_interactionDemo->show();
     
-    // 等待控件完全显示
-    QTest::qWaitForWindowExposed(m_mouseWidget);
-    QTest::qWaitForWindowExposed(m_keyboardWidget);
-    QTest::qWaitForWindowExposed(m_interactionDemo);
+    // 等待控件完全显示，忽略返回值
+    (void)QTest::qWaitForWindowExposed(m_mouseWidget);
+    (void)QTest::qWaitForWindowExposed(m_keyboardWidget);
+    (void)QTest::qWaitForWindowExposed(m_interactionDemo);
 }
 
 void TestMouseKeyboard::cleanup()
@@ -434,4 +434,4 @@ void TestMouseKeyboard::simulateKeyEvent(QWidget *widget, QEvent::Type type,
 
 // 注册测试类
 QTEST_MAIN(TestMouseKeyboard)
-#include "test_mouse_keyboard.moc"
+// #include "test_mouse_keyboard.moc" // 移除不需要的moc包含

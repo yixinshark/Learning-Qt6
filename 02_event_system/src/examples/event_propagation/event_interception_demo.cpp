@@ -323,6 +323,8 @@ bool EventInterceptionDemo::eventFilter(QObject *watched, QEvent *event)
 
 bool EventInterceptionDemo::shouldInterceptEvent(QEvent *event, QObject *source)
 {
+    Q_UNUSED(source)  // 参数暂未使用，但保留以备将来扩展
+    
     // 检查事件类型过滤
     bool typeMatches = false;
     
@@ -645,4 +647,4 @@ QString InterceptableWidget::getEventDetails(QEvent *event)
     }
 }
 
-#include "event_interception_demo.moc"
+// #include "event_interception_demo.moc" // 移除不需要的moc包含

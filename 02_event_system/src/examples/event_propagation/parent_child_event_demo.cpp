@@ -311,4 +311,4 @@ void PropagationChildWidget::paintEvent(QPaintEvent *event)
     QWidget::paintEvent(event);
 }
 
-#include "parent_child_event_demo.moc"
+// #include "parent_child_event_demo.moc" // 移除不需要的moc包含

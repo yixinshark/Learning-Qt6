@@ -373,4 +373,4 @@ void TestBasicEvents::waitForEvents(int msecs)
 }
 
 QTEST_MAIN(TestBasicEvents)
-#include "test_basic_events.moc"
+// #include "test_basic_events.moc" // 移除不需要的moc包含

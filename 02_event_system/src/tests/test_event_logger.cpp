@@ -396,4 +396,4 @@ bool TestEventLogger::waitForSignal(QSignalSpy& spy, int timeout)
 
 // 注册测试类
 QTEST_MAIN(TestEventLogger)
-#include "test_event_logger.moc"
+// #include "test_event_logger.moc" // 移除不需要的moc包含

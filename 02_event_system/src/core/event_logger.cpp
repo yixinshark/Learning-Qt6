@@ -14,8 +14,8 @@ EventLogger::EventLogger(QObject *parent)
     : QObject(parent), m_objectFilter(nullptr),
       m_maxRecords(10000), // 默认最大记录数
       m_enabled(true),
-      m_eventsInLastSecond(0),
-      m_performanceMonitoringEnabled(true) {
+      m_performanceMonitoringEnabled(true),
+      m_eventsInLastSecond(0) {
   // 连接到EventManager的信号
   EventManager *eventManager = EventManager::instance();
   connect(eventManager, &EventManager::eventPosted, this,

@@ -9,9 +9,9 @@
 CustomEventSender::CustomEventSender(QWidget *parent)
     : QWidget(parent)
     , m_mainLayout(nullptr)
-    , m_eventTarget(nullptr)
-    , m_eventsSent(0)
     , m_periodicTimer(new QTimer(this))
+    , m_eventsSent(0)
+    , m_eventTarget(nullptr)
 {
     setupUI();
     

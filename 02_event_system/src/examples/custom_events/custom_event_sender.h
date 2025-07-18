@@ -107,11 +107,11 @@ private:
     QLabel* m_statusLabel;
     QLabel* m_targetLabel;
     
-    // 事件目标
-    QObject* m_eventTarget;
-    
     // 统计信息
     int m_eventsSent;
+    
+    // 事件目标
+    QObject* m_eventTarget;
 };
 
 #endif // CUSTOM_EVENT_SENDER_H
